@@ -11,6 +11,13 @@ To install requirements:
 pip install -r requirements.txt
 ```
 
+Additional pip requirements:
+
+```
+pip install librosa prefetch_generator python_speech_features
+```
+
+
 In addition, this package requires installing signatory, which is not entirely straightforward. The following command should work on Linux and Windows:
 
 ```

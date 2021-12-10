@@ -41,4 +41,25 @@ configs_adversarial_exp = {
         'adversarial_epsilon': [[0., 0.2, 0.4, 0.6, 0.8, 1.0]],
         'adversarial_steps': [50]
     },
+
+    'google_speech': {
+        'non_linearity': ['tanh'],
+        'batch_size': [64],
+        'hidden_channels': [1024],
+        'n_epoch': [200],
+        'reg_lambda': [0., 0.1],
+        'length': [100],
+        'n_train': [50] * 20,
+        'n_test': [1000],
+        'order': [3],
+        'lr': [0.1],
+        'adversarial_epsilon': [[0., 0.2, 0.4, 0.6, 0.8, 1.0]],
+        'adversarial_steps': [50],
+        'gsc_path': ['/home/vbayes/Data/speech_commands_v0.02'],
+        'n_features': [40],
+        'sample_rate': [16000],
+        'window_size': [500],
+        'window_stride': [20],
+        'base_epsilon': [0.1]
+    },
 }

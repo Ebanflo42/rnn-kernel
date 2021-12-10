@@ -21,7 +21,7 @@ def my_config():
     non_linearity = 'tanh'
     batch_size = 64
     reg_lambda = 0.
-    hidden_channels = 8
+    hidden_channels = 800
     n_epoch = 10
     order = 0
     length = 100
@@ -33,20 +33,20 @@ def my_config():
     adversarial_steps = 10
 
     # path to google speech commands
-    gsc_path = ''
+    gsc_path = '/home/vbayes/Data/speech_commands_v0.02'
 
     # number of frequency features to be extracted from speech commands
     n_features = 40
 
     # samples per second of wav file (each command is one second long)
-    sample_rate = 22050
+    sample_rate = 16000
 
-    # window size and stride for frequency extraction (milliseconds)
-    window_size = 30
-    window_stride = 1
+    # window size and stride in samples for frequency extraction
+    window_size = 500
+    window_stride = 20
 
     # some amount of noise perturbation is needed during training to prevent overfitting
-    base_epsilon = 0.1
+    base_epsilon = 0.0
 
 
 @ex.main

@@ -27,16 +27,16 @@ def get_class_id_from_path(example_path):
 
 
 def load_background_noise(gsc_path, sample_rate):
-    noise_files = [f for f in os.listdir(
+    noise_files = [opj(gsc_path, '_background_noise_', f) for f in os.listdir(
         opj(gsc_path, "_background_noise_")) if f.endswith(".wav")]
     return np.concatenate([load(f, sr=sample_rate)[0] for f in noise_files])
 
 
 def load_test_and_valid_lists(gsc_path):
     with open(opj(gsc_path, "testing_list.txt")) as t:
-        test_list = [line.remove("\n") for line in t.readlines()]
+        test_list = [line.replace("\n", "") for line in t.readlines()]
     with open(opj(gsc_path, "validation_list.txt")) as t:
-        valid_list = [line.remove("\n") for line in t.readlines()]
+        valid_list = [line.replace("\n", "") for line in t.readlines()]
     return test_list, valid_list
 
 
@@ -60,8 +60,8 @@ def load_wav_file(gsc_path, class_name, sample_rate, test_list, valid_list, exam
             gsc_path) if d not in class_names]
         directories = [d for d in directories if d not in [
             "_background_noise_", "LICENSE", "README.md", "testing_list.txt", "validation_list.txt"] and get_class_id_from_path(d) == 11]
-        class_name = directories[rd.random_integers(
-            low=0, high=len(directories)-1)]
+        class_name = directories[rd.randint(
+            low=0, high=len(directories))]
 
     # resample until we have an example outside the test and validation sets
     if example_path is None:
@@ -93,13 +93,12 @@ def preprocess_example(audio: np.ndarray, n_features: int,
                        sample_rate: int, window_size: int,
                        window_stride: int, bkg_noise: np.ndarray, epsilon: float):
 
-    noise_ix = rd.random_integers(0, len(bkg_noise) - 2000)
-    noise = bkg_noise[noise_ix: 1000 + noise_ix]
-
+    noise_ix = rd.random_integers(0, len(bkg_noise) - 2*sample_rate)
+    noise = bkg_noise[noise_ix : sample_rate + noise_ix]
     audio += epsilon*noise
 
-    fingerprint = mfcc(audio, samplerate=sample_rate, winlen=1000*window_size/sample_rate,
-                       winstep=1000*window_stride/sample_rate, numcep=n_features, nfilt=2*n_features, nfft=1024)
+    fingerprint = mfcc(audio, samplerate=sample_rate, winlen=window_size/sample_rate,
+                       winstep=window_stride/sample_rate, numcep=n_features, nfilt=2*n_features, nfft=1024)
 
     return fingerprint
 
@@ -122,18 +121,22 @@ def get_google_speech_train_iterator(batch_size: int, n_features: int,
     bkg_noise = load_background_noise(gsc_path, sample_rate)
     bkg_noise /= np.std(bkg_noise)
 
+    # heuristic value
+    # I found that the std of the actual sample waveforms is about 0.08
+    bkg_noise *= 0.08
+
     test_list, valid_list = load_test_and_valid_lists(gsc_path)
 
     @background(max_prefetch=8)
     def train_iter():
         while True:
-            class_ids = rd.random_integers(0, 12, size=batch_size)
+            class_ids = rd.randint(0, 12, size=batch_size)
             wav_samples = [load_wav_file(
                 gsc_path, class_names[i], sample_rate, test_list, valid_list) for i in class_ids]
             fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_example)(
                 audio, n_features, sample_rate, window_size, window_stride, bkg_noise, epsilon) for audio in wav_samples)
             in_tensor = torch.tensor(fingerprints, dtype=torch.float32)
-            targ_tensor = torch.tensor(class_ids, dtype=torch.int32)
+            targ_tensor = torch.tensor(class_ids, dtype=torch.int64)
             yield in_tensor, targ_tensor
 
     return train_iter()
@@ -157,32 +160,36 @@ def get_google_speech_test_iterator(batch_size: int, n_features: int,
     bkg_noise = load_background_noise(gsc_path, sample_rate)
     bkg_noise /= np.std(bkg_noise)
 
+    # heuristic value
+    # I found that the std of the actual sample waveforms is about 0.08
+    bkg_noise *= 0.08
+
     test_list, valid_list = load_test_and_valid_lists(gsc_path)
 
     # randomly filter out unknown examples
     # otherwise they will offset the testing accuracy
-    test_list = [path for path in test_list if get_class_id_from_path(
-        path) < 11 or rd.uniform() > 0.833]
+    test_paths = [path for path in test_list if get_class_id_from_path(
+        path) < 11 or rd.uniform() < 1/11]
 
-    n_test_samples = len(test_list)
+    n_test_samples = len(test_paths)
 
     @background(max_prefetch=8)
-    def train_iter():
+    def test_iter():
         for i in range(0, n_test_samples, batch_size):
             this_batch_size = np.minimum(batch_size, n_test_samples - i)
-            paths = test_list[i: i + this_batch_size]
+            paths = test_paths[i: i + this_batch_size]
             class_ids = [get_class_id_from_path(path) for path in paths]
             # switch 1/12th of the test examples to silence so as to not corrupt accuracy
-            names = [class_names[i] if rd.uniform() > 0.925 else 'silent' for i in class_ids]
+            names = [class_names[i] if rd.uniform() < 11/12 else 'silent' for i in class_ids]
             wav_samples = [load_wav_file(
                 gsc_path, n, sample_rate, test_list, valid_list, example_path=path) for n, path in zip(names, paths)]
             fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_example)(
                 audio, n_features, sample_rate, window_size, window_stride, bkg_noise, epsilon) for audio in wav_samples)
             in_tensor = torch.tensor(fingerprints, dtype=torch.float32)
-            targ_tensor = torch.tensor(class_ids, dtype=torch.int32)
+            targ_tensor = torch.tensor(class_ids, dtype=torch.int64)
             yield in_tensor, targ_tensor
 
-    return train_iter()
+    return test_iter()
 
 
 def generate_spirals(n_samples: int, length: int = 100):

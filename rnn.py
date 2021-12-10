@@ -116,7 +116,7 @@ def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.Data
                         device: torch.device = torch.device("cpu"), lr: float = None):
     """Train the RNN, eventually with a kernel penalization
 
-    :param model: instance of RNNMOdel
+    :param model: instance of RNNModel
     :param train_dataloader: training data
     :param n_epoch: number of epochs
     :param save_dir: directory where the trained models are stored
