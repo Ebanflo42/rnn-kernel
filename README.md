@@ -14,7 +14,7 @@ pip install -r requirements.txt
 Additional pip requirements:
 
 ```
-pip install librosa prefetch_generator python_speech_features
+pip install tqdm librosa prefetch_generator python_speech_features
 ```
 
 

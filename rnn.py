@@ -4,6 +4,8 @@ import torch
 
 import taylor_expansion
 
+from tqdm import tqdm
+
 
 class RNNModel(torch.nn.Module):
     def __init__(self, input_channels: int, hidden_channels: int, output_channels: int, non_linearity: str = 'tanh',
@@ -111,7 +113,7 @@ class RNNCell(torch.nn.Module):
         return self.non_linearity(self.weight_hh(hidden_state) + self.weight_ih(input))
 
 
-def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.DataLoader, n_epoch: int = 30,
+def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.DataLoader, n_steps: int, n_epoch: int = 30,
                         save_dir: str = None, verbose: bool = False, reg_lambda: float = None, order: int = 1,
                         device: torch.device = torch.device("cpu"), lr: float = None):
     """Train the RNN, eventually with a kernel penalization
@@ -139,6 +141,7 @@ def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.Data
             os.makedirs(save_dir)
 
     loss = torch.nn.CrossEntropyLoss()
+    """
     for epoch in range(n_epoch):
         for X_batch, y_batch in train_dataloader:
             optimizer.zero_grad()
@@ -159,3 +162,24 @@ def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.Data
                         os.path.join(save_dir, 'rnn_model_{}.pt'.format(epoch)))
         if verbose:
             print('Epoch: {}   Training loss: {}'.format(epoch, criterion.item()))
+    """
+    for i in tqdm(range(n_steps)):
+        optimizer.zero_grad()
+        X_batch, y_batch = next(train_dataloader)
+        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+
+        y_pred = model.forward(X_batch)
+        criterion = loss(y_pred, y_batch)
+        if reg_lambda > 0:
+            criterion += reg_lambda * model.get_kernel_penalization(order, device=device)
+        criterion.backward()
+        optimizer.step()
+        scheduler.step()
+
+    if save_dir is not None:
+        grad_dict = {k: v.grad for k, v in zip(model.state_dict(), model.parameters())}
+        torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(), 'loss': criterion,
+                    'optimizer': optimizer.state_dict(), 'grad_dict': grad_dict},
+                    os.path.join(save_dir, 'rnn_model_{}.pt'.format(epoch)))
+    if verbose:
+        print('Epoch: {}   Training loss: {}'.format(epoch, criterion.item()))

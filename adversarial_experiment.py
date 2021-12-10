@@ -32,6 +32,9 @@ def my_config():
     adversarial_epsilon = [0.]
     adversarial_steps = 10
 
+    # how many training batches to show the network
+    n_steps = 20000
+
     # path to google speech commands
     gsc_path = '/home/vbayes/Data/speech_commands_v0.02'
 
@@ -51,7 +54,7 @@ def my_config():
 
 @ex.main
 def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, reg_lambda: float, hidden_channels: int,
-                n_epoch: int, order: int, length: int, n_train: int, n_test: int, lr: float, save_dir: str,
+                n_epoch: int, order: int, length: int, n_train: int, n_test: int, lr: float, save_dir: str, n_steps: int,
                 gsc_path: str, n_features: int, sample_rate: int, window_size: int, window_stride: int, base_epsilon: float) \
         -> torch.nn.Module:
     """Main function of the adversarial experiment that generates spirals and train a RNN, with or without penalization.
@@ -95,7 +98,7 @@ def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, re
                          output_channels, non_linearity=non_linearity, device=device)
     model.to(device)
 
-    rnn.train_penalized_rnn(model, train_dataloader, n_epoch=n_epoch, verbose=True, reg_lambda=reg_lambda, order=order,
+    rnn.train_penalized_rnn(model, train_dataloader, n_steps, n_epoch=n_epoch, verbose=True, reg_lambda=reg_lambda, order=order,
                             save_dir=ex_save_dir, device=device, lr=lr)
 
     test_acc = utils.evaluate_model(model, test_dataloader, device=device)

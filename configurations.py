@@ -47,6 +47,7 @@ configs_adversarial_exp = {
         'batch_size': [64],
         'hidden_channels': [1024],
         'n_epoch': [200],
+        'n_steps': [20000],
         'reg_lambda': [0., 0.1],
         'length': [100],
         'n_train': [50] * 20,
