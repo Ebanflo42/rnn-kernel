@@ -15,12 +15,15 @@ class_names = ["yes", "no", "up", "down", "left", "right",
                "on", "off", "stop", "go", "silent", "unknown"]
 
 
-# sloppy
 def get_class_id_from_path(example_path):
+    """
+    :param example_path: path to testing example
+    :return: class index based on the above list of class names
+    """
     for i, name in enumerate(class_names):
         if name in example_path:
             return i
-    raise ValueError(f'Path {example_path} does not appear to be a path to a google speech command.')
+    return 11
 
 
 def load_background_noise(gsc_path, sample_rate):
@@ -56,7 +59,7 @@ def load_wav_file(gsc_path, class_name, sample_rate, test_list, valid_list, exam
         directories = [d for d in os.listdir(
             gsc_path) if d not in class_names]
         directories = [d for d in directories if d not in [
-            "_background_noise_", "LICENSE", "README.md", "testing_list.txt", "validation_list.txt"]]
+            "_background_noise_", "LICENSE", "README.md", "testing_list.txt", "validation_list.txt"] and get_class_id_from_path(d) == 11]
         class_name = directories[rd.random_integers(
             low=0, high=len(directories)-1)]
 
@@ -86,33 +89,24 @@ def load_wav_file(gsc_path, class_name, sample_rate, test_list, valid_list, exam
         return audio
 
 
-def preprocess_train_example(audio: np.ndarray, n_features: int,\
-                             sample_rate: int, window_size: int, window_stride: int):
-
-    fingerprint = mfcc(audio, samplerate=sample_rate, winlen=window_size/sample_rate,
-                       winstep=window_stride/sample_rate, numcep=n_features, nfilt=2*n_features, nfft=1024)
-
-    return fingerprint
-
-
-def preprocess_adversarial_example(audio: np.ndarray, n_features: int,
-                                   sample_rate: int, window_size: int,
-                                   window_stride: int, bkg_noise: np.ndarray, epsilon: float):
+def preprocess_example(audio: np.ndarray, n_features: int,
+                       sample_rate: int, window_size: int,
+                       window_stride: int, bkg_noise: np.ndarray, epsilon: float):
 
     noise_ix = rd.random_integers(0, len(bkg_noise) - 2000)
     noise = bkg_noise[noise_ix: 1000 + noise_ix]
 
     audio += epsilon*noise
 
-    fingerprint = mfcc(audio, samplerate=sample_rate, winlen=window_size/sample_rate,
-                       winstep=window_stride/sample_rate, numcep=n_features, nfilt=2*n_features, nfft=1024)
+    fingerprint = mfcc(audio, samplerate=sample_rate, winlen=1000*window_size/sample_rate,
+                       winstep=1000*window_stride/sample_rate, numcep=n_features, nfilt=2*n_features, nfft=1024)
 
     return fingerprint
 
 
 def get_google_speech_train_iterator(batch_size: int, n_features: int,
-                                     gsc_path: int, sample_rate: int,
-                                     window_size: int, window_stride: int):
+                                     gsc_path: str, sample_rate: int,
+                                     window_size: int, window_stride: int, epsilon: float):
     """
     :param batch_size: batch size
     :param n_features: number of frequency features to decompose words into
@@ -120,8 +114,13 @@ def get_google_speech_train_iterator(batch_size: int, n_features: int,
     :param sample_rate: sample rate for loading wav files
     :param window_size: MFCC window size
     :param window_stride: MFCC window stride
+    :param epsilon: noise amplitude
     :return: training data iterator which loads example batches on the cpu in the background
     """
+
+    # load background noise and normalize volume
+    bkg_noise = load_background_noise(gsc_path, sample_rate)
+    bkg_noise /= np.std(bkg_noise)
 
     test_list, valid_list = load_test_and_valid_lists(gsc_path)
 
@@ -131,8 +130,8 @@ def get_google_speech_train_iterator(batch_size: int, n_features: int,
             class_ids = rd.random_integers(0, 12, size=batch_size)
             wav_samples = [load_wav_file(
                 gsc_path, class_names[i], sample_rate, test_list, valid_list) for i in class_ids]
-            fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_adversarial_example)(
-                audio, n_features, sample_rate, window_size, window_stride) for audio in wav_samples)
+            fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_example)(
+                audio, n_features, sample_rate, window_size, window_stride, bkg_noise, epsilon) for audio in wav_samples)
             in_tensor = torch.tensor(fingerprints, dtype=torch.float32)
             targ_tensor = torch.tensor(class_ids, dtype=torch.int32)
             yield in_tensor, targ_tensor
@@ -140,7 +139,9 @@ def get_google_speech_train_iterator(batch_size: int, n_features: int,
     return train_iter()
 
 
-def get_google_speech_test_iterator(batch_size: int, n_features: int, gsc_path: int, sample_rate: int, window_size: int, window_stride: int):
+def get_google_speech_test_iterator(batch_size: int, n_features: int,
+                                    gsc_path: str, sample_rate: int, window_size: int,
+                                    window_stride: int, epsilon: float):
     """
     :param batch_size: batch size
     :param n_features: number of frequency features to decompose words into
@@ -148,6 +149,7 @@ def get_google_speech_test_iterator(batch_size: int, n_features: int, gsc_path: 
     :param sample_rate: sample rate for loading wav files
     :param window_size: MFCC window size
     :param window_stride: MFCC window stride
+    :param epsilon: noise amplitude
     :return: testing data iterator which loads example batches on the cpu in the background with adversarial noise added
     """
 
@@ -156,17 +158,26 @@ def get_google_speech_test_iterator(batch_size: int, n_features: int, gsc_path: 
     bkg_noise /= np.std(bkg_noise)
 
     test_list, valid_list = load_test_and_valid_lists(gsc_path)
+
+    # randomly filter out unknown examples
+    # otherwise they will offset the testing accuracy
+    test_list = [path for path in test_list if get_class_id_from_path(
+        path) < 11 or rd.uniform() > 0.833]
+
     n_test_samples = len(test_list)
 
     @background(max_prefetch=8)
     def train_iter():
         for i in range(0, n_test_samples, batch_size):
             this_batch_size = np.minimum(batch_size, n_test_samples - i)
-            class_ids = rd.random_integers(0, 12, size=this_batch_size)
+            paths = test_list[i: i + this_batch_size]
+            class_ids = [get_class_id_from_path(path) for path in paths]
+            # switch 1/12th of the test examples to silence so as to not corrupt accuracy
+            names = [class_names[i] if rd.uniform() > 0.925 else 'silent' for i in class_ids]
             wav_samples = [load_wav_file(
-                gsc_path, class_names[i], sample_rate, test_list, valid_list) for i in class_ids]
-            fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_adversarial_example)(
-                audio, n_features, sample_rate, window_size, window_stride) for audio in wav_samples)
+                gsc_path, n, sample_rate, test_list, valid_list, example_path=path) for n, path in zip(names, paths)]
+            fingerprints = Parallel(n_jobs=8, prefer='threads')(delayed(preprocess_example)(
+                audio, n_features, sample_rate, window_size, window_stride, bkg_noise, epsilon) for audio in wav_samples)
             in_tensor = torch.tensor(fingerprints, dtype=torch.float32)
             targ_tensor = torch.tensor(class_ids, dtype=torch.int32)
             yield in_tensor, targ_tensor
