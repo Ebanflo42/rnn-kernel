@@ -11,6 +11,8 @@ import torch
 
 import rnn
 
+from tqdm import tqdm
+
 
 def load_json(path: str):
     """Loads a json object
@@ -98,7 +100,7 @@ def get_ex_results(experiment_dir: str, run_nums: List[str] = None):
     return df
 
 
-def get_RNN_model(experiment: Dict, epoch: int = None) -> torch.nn.Module:
+def get_RNN_model(experiment: Dict, step: int = None, epoch: int = None) -> torch.nn.Module:
     """Extract a trained RNNModel
 
     :param experiment: a row from the dataframe given by get_ex_results
@@ -106,6 +108,8 @@ def get_RNN_model(experiment: Dict, epoch: int = None) -> torch.nn.Module:
     """
     if epoch is None:
         epoch = experiment['n_epoch'] - 1
+    if step is not None:
+        epoch = step
     checkpoint = torch.load(os.path.join(experiment['save_dir'], 'rnn_model_{}.pt'.format(epoch)),
                             map_location=torch.device('cpu'))
     model = rnn.RNNModel(int(experiment['input_channels']), experiment['hidden_channels'],
@@ -146,11 +150,15 @@ def compute_multiclass_accuracy(pred_y: torch.Tensor, true_y: torch.Tensor) -> f
 def gridsearch(ex: sacred.Experiment, config_grid: Dict, save_dir: str):
     ex.observers.append(FileStorageObserver(save_dir))
     param_grid = list(ParameterGrid(config_grid))
+    """
+    # somehow this has 40 parameter sets in it??
     for params in param_grid:
         ex.run(config_updates=params, info={})
+    """
+    ex.run(config_updates=param_grid[0], info={})
 
 
-def evaluate_model(model: torch.nn.Module, test_dataloader: torch.utils.data.DataLoader,
+def evaluate_model(model: torch.nn.Module, test_dataloader: torch.utils.data.DataLoader, steps: int = None,
                    device: torch.device = torch.device('cpu')) -> float:
     """Evaluate a model on some testdata, with metrics the average accuracy.
 
@@ -161,11 +169,19 @@ def evaluate_model(model: torch.nn.Module, test_dataloader: torch.utils.data.Dat
     """
     count = 0
     eval = 0.
-    for X_test, y_test in test_dataloader:
-        X_test, y_test = X_test.to(device), y_test.to(device)
-        count += len(y_test)
-        y_pred = model.forward(X_test)
-        eval += compute_multiclass_accuracy(y_pred, y_test) * len(y_test)
+    if steps is None:
+        for X_test, y_test in tqdm(test_dataloader):
+            X_test, y_test = X_test.to(device), y_test.to(device)
+            count += len(y_test)
+            y_pred = model.forward(X_test)
+            eval += compute_multiclass_accuracy(y_pred, y_test) * len(y_test)
+    else:
+        for i in tqdm(range(steps)):
+            X_test, y_test = next(test_dataloader)
+            X_test, y_test = X_test.to(device), y_test.to(device)
+            count += len(y_test)
+            y_pred = model.forward(X_test)
+            eval += compute_multiclass_accuracy(y_pred, y_test) * len(y_test)
     return eval / count
 
 

@@ -178,8 +178,8 @@ def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.Data
 
     if save_dir is not None:
         grad_dict = {k: v.grad for k, v in zip(model.state_dict(), model.parameters())}
-        torch.save({'epoch': epoch, 'model_state_dict': model.state_dict(), 'loss': criterion,
+        torch.save({'epoch': i, 'model_state_dict': model.state_dict(), 'loss': criterion,
                     'optimizer': optimizer.state_dict(), 'grad_dict': grad_dict},
-                    os.path.join(save_dir, 'rnn_model_{}.pt'.format(epoch)))
+                    os.path.join(save_dir, 'rnn_model_{}.pt'.format(i)))
     if verbose:
-        print('Epoch: {}   Training loss: {}'.format(epoch, criterion.item()))
+        print('Epoch: {}   Training loss: {}'.format(i, criterion.item()))

@@ -78,7 +78,10 @@ def load_wav_file(gsc_path, class_name, sample_rate, test_list, valid_list, exam
 
         example_path = opj(example_path, example_file)
 
-    audio, _ = load(example_path, sr=sample_rate)
+        audio, _ = load(example_path, sr=sample_rate)
+
+    else:
+        audio, _ = load(opj(gsc_path, example_path), sr=sample_rate)
 
     # cut or paste to make the sample exactly 1 second
     if len(audio) >= sample_rate:
@@ -172,6 +175,7 @@ def get_google_speech_test_iterator(batch_size: int, n_features: int,
         path) < 11 or rd.uniform() < 1/11]
 
     n_test_samples = len(test_paths)
+    print(f'Number of testing samples: {n_test_samples}')
 
     @background(max_prefetch=8)
     def test_iter():

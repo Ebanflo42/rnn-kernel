@@ -33,10 +33,10 @@ def my_config():
     adversarial_steps = 10
 
     # how many training batches to show the network
-    n_steps = 20000
+    n_steps = 20
 
     # path to google speech commands
-    gsc_path = '/home/vbayes/Data/speech_commands_v0.02'
+    gsc_path = '/home/medusa/Data/speech_commands_v0.02'
 
     # number of frequency features to be extracted from speech commands
     n_features = 40
@@ -85,7 +85,7 @@ def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, re
     #    length, batch_size, n_train=n_train, n_test=n_test)
     train_dataloader = generate_data.get_google_speech_train_iterator(
         batch_size, n_features, gsc_path, sample_rate, window_size, window_stride, base_epsilon)
-    test_dataloader = generate_data.get_google_speech_train_iterator(
+    test_dataloader = generate_data.get_google_speech_test_iterator(
         batch_size, n_features, gsc_path, sample_rate, window_size, window_stride, 0)
     output_channels = 12
 
@@ -101,15 +101,21 @@ def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, re
     rnn.train_penalized_rnn(model, train_dataloader, n_steps, n_epoch=n_epoch, verbose=True, reg_lambda=reg_lambda, order=order,
                             save_dir=ex_save_dir, device=device, lr=lr)
 
-    test_acc = utils.evaluate_model(model, test_dataloader, device=device)
-    train_acc = utils.evaluate_model(model, train_dataloader, device=device)
+    test_acc = utils.evaluate_model(model, test_dataloader, steps=10, device=device)
+    train_acc = utils.evaluate_model(model, train_dataloader, steps=10, device=device)
+
     _run.log_scalar('accuracy_test', test_acc.item())
     _run.log_scalar('accuracy_train', train_acc.item())
+
+    del train_dataloader
+    del test_dataloader
+
     return model
 
 
+@ex.capture
 def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
-                                 gsc_path: str, n_features: int, sample_rate: int, window_size: int, window_stride: int, run_nums: List[str] = None):
+                                 gsc_path: str, n_features: int, sample_rate: int, window_size: int, window_stride: int, n_steps: int = None, run_nums: List[str] = None):
     """Generates adversarial test examples for several runs in an experiment and save the resulting accuracy in a
     dataframe.
 
@@ -125,7 +131,7 @@ def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
         print('Computing adversarial accuracy on experiment {}/{}'.format(index, n_runs))
         for epsilon in exp['adversarial_epsilon']:
             print('epsilon: {}'.format(epsilon))
-            model = utils.get_RNN_model(exp)
+            model = utils.get_RNN_model(exp, step=n_steps-1)
             """
             X_test, y_test = generate_data.generate_spirals(
                 exp['n_test'], length=exp['length'])
@@ -139,7 +145,7 @@ def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
             """
             test_dataloader = generate_data.get_google_speech_test_iterator(
                 batch_size, n_features, gsc_path, sample_rate, window_size, window_stride, epsilon)
-            acc_test = utils.evaluate_model(model, test_dataloader)
+            acc_test = utils.evaluate_model(model, test_dataloader, steps=10)
             df_adv = df_adv.append({'epsilon': epsilon, 'acc_test_adv': float(acc_test),
                                     'reg_lambda': exp['reg_lambda']}, ignore_index=True)
 
@@ -148,6 +154,7 @@ def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
     df_adv.to_csv(os.path.join(experiment_dir, 'adversarial_accuracy.csv'))
 
 
+@ex.capture
 def compute_norms(experiment_dir: str, run_nums: List[str] = None):
     """"Computes the RKHS norm and the Frobenius norm of the weights during training of the runs in run_nums.
 

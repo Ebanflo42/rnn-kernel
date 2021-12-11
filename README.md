@@ -14,7 +14,7 @@ pip install -r requirements.txt
 Additional pip requirements:
 
 ```
-pip install tqdm librosa prefetch_generator python_speech_features
+pip install tqdm joblib librosa prefetch_generator python_speech_features
 ```
 
 
@@ -35,6 +35,12 @@ pip install signatory==1.2.4.1.7.1 --no-cache-dir --force-reinstall
 ```
 
 For more detail, see [their documentation](https://signatory.readthedocs.io/en/latest/pages/usage/installation.html).
+
+## Run google speech commands experiment
+
+```
+python main.py --adversarial-exp google_speech
+```
 
 ## Testing
 
