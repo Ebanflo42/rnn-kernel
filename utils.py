@@ -151,8 +151,9 @@ def gridsearch(ex: sacred.Experiment, config_grid: Dict, save_dir: str):
     ex.observers.append(FileStorageObserver(save_dir))
     param_grid = list(ParameterGrid(config_grid))
     """
-    # somehow this has 40 parameter sets in it??
+    # for some reason the program seems to get stuck in some kind of loop after the first iteration
     for params in param_grid:
+        print(params['reg_lambda'])
         ex.run(config_updates=params, info={})
     """
     ex.run(config_updates=param_grid[0], info={})

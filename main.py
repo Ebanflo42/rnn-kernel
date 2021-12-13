@@ -13,9 +13,9 @@ import taylor_experiment
 import utils
 
 
-#@click.command()
-#@click.option('--taylor-exp', type=str, default=None, help='Should run the Taylor expansion experiment.')
-#@click.option('--adversarial-exp', type=str, default=None, help='Should run the adversarial accuracy experiment.')
+@click.command()
+@click.option('--taylor-exp', type=str, default=None, help='Should run the Taylor expansion experiment.')
+@click.option('--adversarial-exp', type=str, default=None, help='Should run the adversarial accuracy experiment.')
 def main(taylor_exp: str, adversarial_exp: str):
     """ Main function that runs either the taylor or the adversarial experiment.
 
@@ -58,16 +58,16 @@ def main(taylor_exp: str, adversarial_exp: str):
         adversarial_experiment.compute_adversarial_accuracy(save_dir, n_steps=config['n_steps'][0])
 
         print('Computing training norms')
-        #adversarial_experiment.compute_norms(save_dir)
+        adversarial_experiment.compute_norms(save_dir)
 
         print('Plotting results')
         logging.disable(logging.WARNING)  # Disable matplotlib warnings
         plots.plot_spirals_adversarial(save_dir)
-        #plots.plot_spirals_training_norms(save_dir)
+        plots.plot_spirals_training_norms(save_dir)
         logging.disable(logging.NOTSET)  # Re-enable warnings
 
 
 if __name__ == '__main__':
     # Check if GPU is used
     print('GPU available: ', torch.cuda.is_available())
-    main(None, 'google_speech')
+    main()

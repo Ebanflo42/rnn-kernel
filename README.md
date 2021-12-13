@@ -42,6 +42,10 @@ For more detail, see [their documentation](https://signatory.readthedocs.io/en/l
 python main.py --adversarial-exp google_speech
 ```
 
+Download speech commands at: http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz
+
+Set the `gsc_path` in `adversarial_experiment.py` to `/path/to/speech_commands_v0.02`.
+
 ## Testing
 
 ```

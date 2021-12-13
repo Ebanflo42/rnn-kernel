@@ -51,10 +51,12 @@ def my_config():
     # some amount of noise perturbation is needed during training to prevent overfitting
     base_epsilon = 0.0
 
+    save_every = 1
+
 
 @ex.main
 def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, reg_lambda: float, hidden_channels: int,
-                n_epoch: int, order: int, length: int, n_train: int, n_test: int, lr: float, save_dir: str, n_steps: int,
+                n_epoch: int, save_every: int, order: int, length: int, n_train: int, n_test: int, lr: float, save_dir: str, n_steps: int,
                 gsc_path: str, n_features: int, sample_rate: int, window_size: int, window_stride: int, base_epsilon: float) \
         -> torch.nn.Module:
     """Main function of the adversarial experiment that generates spirals and train a RNN, with or without penalization.
@@ -98,7 +100,7 @@ def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, re
                          output_channels, non_linearity=non_linearity, device=device)
     model.to(device)
 
-    rnn.train_penalized_rnn(model, train_dataloader, n_steps, n_epoch=n_epoch, verbose=True, reg_lambda=reg_lambda, order=order,
+    rnn.train_penalized_rnn(model, train_dataloader, n_steps, save_every=save_every, n_epoch=n_epoch, verbose=True, reg_lambda=reg_lambda, order=order,
                             save_dir=ex_save_dir, device=device, lr=lr)
 
     test_acc = utils.evaluate_model(model, test_dataloader, steps=10, device=device)
@@ -106,9 +108,6 @@ def train_model(_run: sacred.Experiment, non_linearity: str, batch_size: int, re
 
     _run.log_scalar('accuracy_test', test_acc.item())
     _run.log_scalar('accuracy_train', train_acc.item())
-
-    del train_dataloader
-    del test_dataloader
 
     return model
 
@@ -131,7 +130,7 @@ def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
         print('Computing adversarial accuracy on experiment {}/{}'.format(index, n_runs))
         for epsilon in exp['adversarial_epsilon']:
             print('epsilon: {}'.format(epsilon))
-            model = utils.get_RNN_model(exp, step=n_steps-1)
+            model = utils.get_RNN_model(exp, step=n_steps)
             """
             X_test, y_test = generate_data.generate_spirals(
                 exp['n_test'], length=exp['length'])
@@ -145,7 +144,7 @@ def compute_adversarial_accuracy(experiment_dir: str, batch_size: int,
             """
             test_dataloader = generate_data.get_google_speech_test_iterator(
                 batch_size, n_features, gsc_path, sample_rate, window_size, window_stride, epsilon)
-            acc_test = utils.evaluate_model(model, test_dataloader, steps=10)
+            acc_test = utils.evaluate_model(model, test_dataloader, steps=1)
             df_adv = df_adv.append({'epsilon': epsilon, 'acc_test_adv': float(acc_test),
                                     'reg_lambda': exp['reg_lambda']}, ignore_index=True)
 

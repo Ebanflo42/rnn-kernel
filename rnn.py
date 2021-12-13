@@ -113,7 +113,7 @@ class RNNCell(torch.nn.Module):
         return self.non_linearity(self.weight_hh(hidden_state) + self.weight_ih(input))
 
 
-def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.DataLoader, n_steps: int, n_epoch: int = 30,
+def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.DataLoader, n_steps: int, save_every: int = None, n_epoch: int = 30,
                         save_dir: str = None, verbose: bool = False, reg_lambda: float = None, order: int = 1,
                         device: torch.device = torch.device("cpu"), lr: float = None):
     """Train the RNN, eventually with a kernel penalization
@@ -176,10 +176,16 @@ def train_penalized_rnn(model: RNNModel, train_dataloader: torch.utils.data.Data
         optimizer.step()
         scheduler.step()
 
+        if save_dir is not None and (save_every is None or i%save_every == 0):
+            grad_dict = {k: v.grad for k, v in zip(model.state_dict(), model.parameters())}
+            torch.save({'epoch': i, 'model_state_dict': model.state_dict(), 'loss': criterion,
+                        'optimizer': optimizer.state_dict(), 'grad_dict': grad_dict},
+                        os.path.join(save_dir, 'rnn_model_{}.pt'.format(i)))
+
     if save_dir is not None:
         grad_dict = {k: v.grad for k, v in zip(model.state_dict(), model.parameters())}
-        torch.save({'epoch': i, 'model_state_dict': model.state_dict(), 'loss': criterion,
+        torch.save({'epoch': n_steps, 'model_state_dict': model.state_dict(), 'loss': criterion,
                     'optimizer': optimizer.state_dict(), 'grad_dict': grad_dict},
-                    os.path.join(save_dir, 'rnn_model_{}.pt'.format(i)))
+                    os.path.join(save_dir, 'rnn_model_{}.pt'.format(n_steps)))
     if verbose:
-        print('Epoch: {}   Training loss: {}'.format(i, criterion.item()))
+        print('Step: {}   Training loss: {}'.format(i, criterion.item()))

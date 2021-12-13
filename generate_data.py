@@ -175,7 +175,6 @@ def get_google_speech_test_iterator(batch_size: int, n_features: int,
         path) < 11 or rd.uniform() < 1/11]
 
     n_test_samples = len(test_paths)
-    print(f'Number of testing samples: {n_test_samples}')
 
     @background(max_prefetch=8)
     def test_iter():
